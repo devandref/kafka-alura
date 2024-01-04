@@ -14,7 +14,6 @@ public class FraudDetectorService {
         }
     }
 
-
     private void parse(ConsumerRecord<String, String> record) {
         System.out.println("-----------------------------------------");
         System.out.println("Processing new order, checking for fraud");

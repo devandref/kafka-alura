@@ -1,58 +1,46 @@
 package io.github.devandref.kafkaalura;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.io.Closeable;
-import java.io.IOException;
-import java.time.Duration;
-import java.util.Collections;
 import java.util.Properties;
-import java.util.UUID;
-import java.util.regex.Pattern;
+import java.util.concurrent.ExecutionException;
 
-public class KafkaService implements Closeable {
+public class KafkaDispatcher<T> implements Closeable {
 
-    private final KafkaConsumer<String, String> consumer;
-    private final ConsumerFunction parse;
+    private final KafkaProducer<String, T> producer;
 
-    KafkaService(String groupId, String topic, ConsumerFunction parse) {
-        this.parse = parse;
-        this.consumer = new KafkaConsumer<String, String>(properties(groupId));
-        consumer.subscribe(Collections.singletonList(topic));
+    KafkaDispatcher() {
+        this.producer = new KafkaProducer<>(properties());
     }
 
-    KafkaService(String groupId, Pattern topic, ConsumerFunction parse) {
-        this.parse = parse;
-        this.consumer = new KafkaConsumer<String, String>(properties(groupId));
-        consumer.subscribe(topic);
-    }
-
-    void run() {
-        while (true) {
-            var records = consumer.poll(Duration.ofMillis(100));
-            if (!records.isEmpty()) {
-                System.out.println("Encontrei " + records.count() + " registros");
-                for (var record : records) {
-                    parse.consume(record);
-                }
+    public void send(String topicName, String key, T value) throws ExecutionException, InterruptedException {
+        var record = new ProducerRecord<>(topicName, key, value);
+        Callback callback = (data, ex) -> {
+            if (ex != null) {
+                ex.printStackTrace();
+                return;
             }
-        }
+            System.out.println("sucesso enviando " + data.topic() + ":::partition" + data.partition());
+        };
+        producer.send(record, callback).get();
     }
 
-    private static Properties properties(String groupId) {
+    private static Properties properties() {
         var properties = new Properties();
-        properties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "127.0.0.1:9092");
-        properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        properties.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, UUID.randomUUID().toString());
+        properties.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "127.0.0.1:9092");
+        properties.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        properties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, GsonSerializer.class.getName());
         return properties;
     }
 
     @Override
     public void close() {
-        consumer.close();
+        producer.close();
     }
+
 }

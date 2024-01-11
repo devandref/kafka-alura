@@ -42,4 +42,5 @@ public class KafkaDispatcher<T> implements Closeable {
     public void close() {
         producer.close();
     }
+
 }
